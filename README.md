@@ -19,13 +19,13 @@ show green symbol when online
 
 
  for frontend:http://52.200.12.157/
- for backend:http://52.200.12.157:3000/
+ for backend:http://52.200.12.157:3000/=>ttp://52.200.12.157/api
 
 
  Domain Name=devTinder.com=>52.200.12.157
 
  config nginx-etc/nginx/sites-available/
- 
+
 
 
  fronetend:devtinder.com
