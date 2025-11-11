@@ -15,3 +15,18 @@ show green symbol when online
  =-save the oreder in payment collections
  -make the api dynamic
  - set up razor pay webhook ion your live api
+
+
+
+ for frontend:http://52.200.12.157/
+ for backend:http://52.200.12.157:3000/
+
+
+ Domain Name=devTinder.com=>52.200.12.157
+
+ config nginx-etc/nginx/sites-available/
+ 
+
+
+ fronetend:devtinder.com
+ backend:devtinder.com/api=> this is the standerd way
