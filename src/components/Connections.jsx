@@ -1,4 +1,4 @@
-import { useEffect ,useState} from "react";
+import { useEffect ,useState,useMemo} from "react";
 import { BASE_URL } from "../utils/constants";
 import { useDispatch } from "react-redux";
 import { useSelector } from "react-redux";
@@ -6,25 +6,46 @@ import { addConnections } from "../utils/connectionSlice";
 import { Link } from "react-router-dom";
 import { createSocketConnection } from "../utils/socket";
 import axios from "axios";
+
+import dayjs from "dayjs";
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
 const Connections= ()=>{
     const connections = useSelector((store) => store.connections);
+    const user= useSelector(store=>store.user.data)
+   const userId = user?._id;
+
+   console.log(userId,'userId...')
     
     const [userStatus, setUserStatus] = useState({});
  
     const dispatch = useDispatch();
+
+
+    // Use useMemo to create the socket only once with the correct userId in the query.
+    const socket = useMemo(() => {
+        return createSocketConnection(userId); 
+    }, [userId]);  
  
   const fetchConnections = async () => {
     try {
       const res = await axios.get(BASE_URL + "user/connections", {
         withCredentials: true,
       });
+
       dispatch(addConnections(res.data.data));
         // Prepare initial statuses from DB
+      
+
       const initial = {};
-      res.data.data.forEach((u) => {
-        initial[u._id] = { status: "offline", lastSeen: u.lastSeen };
-      });
-      console.log(initial,'initailll')
+            res.data.data.forEach((u) => {
+                initial[u._id] = {
+                    status: u.isOnline ? "online" : "offline",
+                    lastSeen: u.lastSeen
+                };
+            });
+     
       setUserStatus(initial);
     
     } catch (err) {
@@ -34,43 +55,62 @@ const Connections= ()=>{
   };
 
   useEffect(() => {
+
+    // ⭐️ FIX: Only proceed if the socket connection was successfully created
+    if (!socket) {
+        console.warn("Socket connection not established yet, skipping listeners.");
+        return; 
+    }
     fetchConnections();
 
 
 
-     const socket = createSocketConnection();
-    socket.on("userOnline", (userId) => {
-      setUserStatus((prev) => ({
-        ...prev,
-        [userId]: { status: "online" },
-      }));
-    });
-    socket.on("userOffline", ({ userId, lastSeen }) => {
-      setUserStatus((prev) => ({
-        ...prev,
-        [userId]: { status: "offline", lastSeen },
-      }));
-    });
+    //  const socket = createSocketConnection();
+    // socket.on("userOnline", (userId) => {
+    //   setUserStatus((prev) => ({
+    //     ...prev,
+    //     [userId]: { status: "online" },
+    //   }));
+    // });
+    // socket.on("userOffline", ({ userId, lastSeen }) => {
+    //   setUserStatus((prev) => ({
+    //     ...prev,
+    //     [userId]: { status: "offline", lastSeen },
+    //   }));
+    // });
 
-    return () => socket.disconnect();
-  }, []);
+    // B. Socket Listeners
+        socket.on("userOnline", (userId) => {
+            console.log(`User ${userId} came online.`);
+            setUserStatus((prev) => ({
+                ...prev,
+                [userId]: { status: "online", lastSeen: prev[userId]?.lastSeen },
+            }));
+        });
+        
+        // ⭐️ Listens for the object { userId, lastSeen } from the backend
+        socket.on("userOffline", ({ userId, lastSeen }) => {
+            console.log(`User ${userId} went offline at ${lastSeen}.`);
+            setUserStatus((prev) => ({
+                ...prev,
+                [userId]: { status: "offline", lastSeen: lastSeen },
+            }));
+        });
+
+    // return () => socket.disconnect();
+
+    return () => {
+            socket.off("userOnline");
+            socket.off("userOffline");
+            socket.disconnect(); 
+        };
+  }, [userId],socket);
   
-  // Listen for online/offline updates via socket
-  // useEffect(() => {
-  //    const socket=createSocketConnection();
-  //   if (!socket) return;
-
-  //   socket.on("updateUserStatus", ({ userId, status, lastSeen }) => {
-  //     setUserStatus((prev) => ({
-  //       ...prev,
-  //       [userId]: { status, lastSeen },
-  //     }));
-  //   });
-
-  //   return () => socket.off("updateUserStatus");
-  // }, []);
+  
 
 console.log(connections,'connections')
+
+console.log(userStatus,'userstatus....')
 
 if(connections?.length ===0 ) return <p>No Connections Found!</p>;
 
@@ -82,9 +122,18 @@ if(connections?.length ===0 ) return <p>No Connections Found!</p>;
         const { _id, firstName, lastName, photoUrl, age, gender, about } =
           connection;
 
-          const status = userStatus[_id] || {};
-        const isOnline = status.status === "online";
-     console.log(status,'status')
+        //   const status = userStatus[_id] || {};
+        // const isOnline = status.status === "online";
+
+        // Get the status from the real-time state, falling back to initial DB data
+                const statusData = userStatus[_id] || { 
+                    status: connection.isOnline ? "online" : "offline", 
+                    lastSeen: connection.lastSeen 
+                };
+                console.log(statusData,'satusData....')
+                
+                const isOnline = statusData.status === "online";
+     
         return (
           <div
             key={_id}
@@ -112,9 +161,10 @@ if(connections?.length ===0 ) return <p>No Connections Found!</p>;
       className="w-20 h-20 rounded-full object-cover"
       src={photoUrl}
     />
-      {isOnline && (
-                  <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></span>
-                )}
+     {/* Online Dot */}
+                            {isOnline && (
+                                <span className="absolute bottom-0 left-16 w-4 h-4 bg-green-500 border-2 border-base-300 rounded-full"></span>
+                            )}
     <div className="text-left mx-4">
       <h2 className="font-bold text-xl">
         {firstName + " " + lastName}
@@ -122,13 +172,22 @@ if(connections?.length ===0 ) return <p>No Connections Found!</p>;
       {age && gender && <p>{age + ", " + gender}</p>}
       <p>{about}</p>
       {/* Status line */}
-                <p className="text-sm text-gray-400">
+                {/* <p className="text-sm text-gray-400">
                   {isOnline
                     ? "Online"
                     : status.lastSeen
                     ? `Last seen ${dayjs(status.lastSeen).fromNow()}`
                     : "Offline"}
-                </p>
+                </p> */}
+
+                {/* Status line */}
+                                <p className="text-sm text-gray-400">
+                                    {isOnline
+                                        ? "Online"
+                                        : statusData.lastSeen
+                                            ? `Last seen ${dayjs(statusData.lastSeen).fromNow()}`
+                                            : "Offline"}
+                                </p>
     </div>
   </div>
 

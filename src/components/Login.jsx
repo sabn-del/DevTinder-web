@@ -23,9 +23,9 @@ const navigate=useNavigate()
         emailId,
         password
             },{withCredentials:true});
-           
+           console.log(res,'res')
             dispatch(addUser(res.data.data))
-            navigate('/')
+            navigate('/feed')
         }
         
         catch(err){

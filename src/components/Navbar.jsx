@@ -6,8 +6,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
  const Navbar=()=>{
 
-    const user=useSelector((store)=>store.user);
-    console.log(user,'userr')
+    const user=useSelector((store)=>store.user.data);
+    console.log(user,'userr from nav')
     const navigate=useNavigate();
 
     
@@ -24,7 +24,9 @@ catch(err){
 console.log(err)
 }
    }
+   
     return(
+      
  <div className="navbar bg-base-300 shadow-sm">
   <div className="flex-1">
     <Link to='/' className="btn btn-ghost text-xl">DevTinder</Link>

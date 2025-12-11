@@ -1,26 +1,40 @@
 import { useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState ,useRef} from "react";
 import { createSocketConnection } from "../utils/socket";
 import { BASE_URL } from "../utils/constants";
-import { use } from "react";
 import  axios from 'axios';
 import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 
+dayjs.extend(relativeTime);
 const Chat =()=>{
+
+  
     const {targetUserId}= useParams();
+   
+   
+    console.log(targetUserId,'targetuserid...=>');
+    
     const[messages,setMessage]=useState([]);
     const[newMessage,setNewMessage]=useState('');
      const [userStatus, setUserStatus] = useState({});
-   const user=useSelector(store=>store.user)
+   const user= useSelector(store=>store.user.data)
+   const userId = user?._id;
+console.log(userId,'userId====>')
+
+const messagesEndRef = useRef(null);
+
+
 
    const fetchChatMessage= async()=>{
     const chat= await  axios.get(BASE_URL+"chat/"+targetUserId,{
       withCredentials:true
     })
-     console.log(chat.data.messages,'chat')
+     console.log(chat.data.messages,'chatfrom chatpage')
+     
      const chatMessage= chat.data.messages.map((msg)=>{
-      const{senderId,text}=msg
+      const{senderId,text}= msg
       return {firstName:senderId?.firstName, lastName:senderId?.lastName,text}
      })
      setMessage(chatMessage)
@@ -32,64 +46,130 @@ const Chat =()=>{
       fetchChatMessage()
      },[])
        
-     const userId= user?._id
-    useEffect(()=>{
-      if(!userId){
-        return
-      }
-
-const socket=createSocketConnection();
-console.log(socket,'sockett')
-// as soon as the page loads,the socket connection is made and joinChat event is emitted
-socket.emit("joinChat",{ firstName:user.firstName,userId,targetUserId})
-
-socket.on("messageRecieved",({firstName,lastName,text})=>{
-  console.log(firstName+""+text)
-  setMessage((messages)=>[...messages,{firstName,lastName,text}])
-})
-return ()=>{
-  socket.disconnect();
-}
-    },[userId,targetUserId]);
-   
     
+    
+//      useEffect(()=>{
+//       if(!userId){
+//         console.log("Socket connection skipped: userId is null/undefined.");
+//         return
+//       }
 
-    useEffect(() => {
-   const socket=createSocketConnection();
+// const socket=createSocketConnection();
+// socketRef.current = socket; // Store the socket instance
+// console.log("✅ Socket connected and stored.");
+// socket.on('connect', () => console.log('🟢 Socket.IO: Connection successful.'));
+//     socket.on('disconnect', (reason) => console.error('❌ Socket.IO: Disconnected. Reason:', reason));
+//     socket.on('connect_error', (error) => console.error('❌ Socket.IO: Connection Error:', error));
+//     // ----------------------------
+// // as soon as the page loads,the socket connection is made and joinChat event is emitted
+// socket.emit("joinChat",{ firstName:user.firstName,userId,targetUserId})
 
+// socket.on("messageReceived",({firstName,lastName,text})=>{
+//   console.log(firstName+" "+text,'message recieved')
+//   setMessage((messages)=>[...messages,{firstName,lastName,text}])
+// })
+// socket.on("updateUserStatus", ({ userId, status, lastSeen }) => {
+//             console.log(`Status updated for ${userId}: ${status}`);
+//             setUserStatus((prev) => ({
+//                 ...prev,
+//                 [userId]: { status, lastSeen }
+//             }));
+//         });
+//         socket.emit("userOnline", userId);
+// return ()=>{
+  
+//   // if (socketRef.current) {
+//   //     socketRef.current.disconnect();
+//   //   }
+//   socket.off("messageReceived"); // Remove specific listeners
+//             socket.off("updateUserStatus");
+//             socket.disconnect(); // Disconnect the main connection
+//             // socketRef.current = null;
+//   };
+  
+//     },[userId,targetUserId]);
    
-      if (userId) {
-    socket.emit("userOnline", user._id);
-  }
-}, [user]);
+    useEffect(() => {
+    if (!userId) {
+      return;
+    }
+    const socket = createSocketConnection();
+    // As soon as the page loaded, the socket connection is made and joinChat event is emitted
+    socket.emit("joinChat", {
+      firstName: user.firstName,
+      userId,
+      targetUserId,
+    });
+
+    socket.on("messageReceived", ({ firstName, lastName, text }) => {
+      console.log(firstName + " :  " + text);
+      setMessage((messages) => [...messages, { firstName, lastName, text }]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [userId, targetUserId]);
+
+
+//     const sendMessage=()=>{
+    
+//   //    if (!newMessage.trim() || !socketRef.current) {
+//   //     console.log("Socket is null or message empty. Cannot send.");
+//   //   return; 
+//   // }
+//   // if (!newMessage.trim()) {
+//   //       console.log("Input is empty, cannot send.");
+//   //       return;
+//   //   }
+    
+//   //   if (!socketRef.current) {
+//   //       console.error("❌ SOCKET IS NULL. Cannot emit message.");
+//   //       // Optional: show a loading indicator or message to the user
+//   //       return; 
+//   //   }
+      
+//       socketRef.current.emit("sendMessage",{
+//         firstName:user.firstName,
+//         lastName:user.lastName,
+// userId,
+// targetUserId,
+// text:newMessage
+//       })
+//       setMessage((messages) => [
+//       ...messages,
+//       { 
+//         firstName: user.firstName, 
+//         lastName: user.lastName, 
+//         text: newMessage 
+//       }
+//     ]);
+//       setNewMessage("")
+//     }
+
+
+ const sendMessage = () => {
+    const socket = createSocketConnection();
+    socket.emit("sendMessage", {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      userId,
+      targetUserId,
+      text: newMessage,
+    });
+    setNewMessage("");
+  };
+
+
+const scrollToBottom = () => {
+  messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+};
 
 useEffect(() => {
-    const socket=createSocketConnection();
-  socket.on("updateUserStatus", ({ userId, status, lastSeen }) => {
-    setUserStatus((prev) => ({
-      ...prev,
-      [userId]: { status, lastSeen }
-    }));
-  });
+  scrollToBottom();
+}, [messages]); // Runs whenever the messages state updates
 
-  return () => {
-    socket.off("updateUserStatus");
-  };
-}, []);
-   
-    const sendMessage=()=>{
-     
-      const socket=createSocketConnection();
-      socket.emit("sendMessage",{
-        firstName:user.firstName,
-        lastName:user.lastName,
-userId,
-targetUserId,
-text:newMessage
-      })
-      setNewMessage("")
-    }
-
+console.log(messages,'messages===>')
     return(
         <div className="w-3/4 mx-auto border border-gray-600 m-5 h-[70vh] flex flex-col">
       <h1 className="p-5 border-b border-gray-600">Chat</h1>
@@ -97,16 +177,20 @@ text:newMessage
         {messages.map((msg, index) => {
           return (
             <div
+            
               key={index}
               className={
                 "chat " +
                 (user.firstName === msg.firstName ? "chat-end" : "chat-start")
               }
             >
-              <p>
-  {userStatus[user._id]?.status === "online"
+            
+<p>
+  {userStatus[targetUserId]?.status === "online"
     ? "Online"
-    : `Last seen ${dayjs(userStatus[user._id]?.lastSeen).fromNow()}`}
+    : userStatus[targetUserId]?.lastSeen
+      ? `Last seen ${dayjs(userStatus[targetUserId]?.lastSeen).fromNow()}` // Check if lastSeen exists
+      : "Status Unknown"}
 </p>
               <div className="chat-header">
                 {`${msg.firstName}  ${msg.lastName}`}
@@ -117,6 +201,7 @@ text:newMessage
             </div>
           );
         })}
+        <div ref={messagesEndRef} />
       </div>
       <div className="p-5 border-t border-gray-600 flex items-center gap-2">
         <input
